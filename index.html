@@ -60,8 +60,8 @@
                 <div id="detailFields" class="space-y-2 text-sm"></div>
 
                 <div class="pt-2 border-t border-gray-100">
-                    <label for="remarksInput" class="block text-sm font-semibold text-gray-700 mb-1">Remarks</label>
-                    <textarea id="remarksInput" rows="3" placeholder="Enter your notes here..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"></textarea>
+                    <label for="remarksInput" class="block text-sm font-semibold text-gray-700 mb-1">My Remarks</label>
+                    <textarea id="remarksInput" rows="3" placeholder="Type your personal remarks here..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"></textarea>
                 </div>
 
                 <button id="saveRemarkBtn" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium shadow hover:bg-blue-700 transition">
@@ -96,7 +96,7 @@
             fetch('tcitems.csv')
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error('Could not find tcitems.csv in the root folder.');
+                        throw new Error('Could not find tcitems.csv in the repository folder.');
                     }
                     return response.text();
                 })
@@ -119,9 +119,9 @@
             // Extract Headers
             csvHeaders = lines[0].split(',').map(h => h.trim());
             
-            // Auto-append 'REMARKS' header if it doesn't exist
-            if (!csvHeaders.includes('REMARKS')) {
-                csvHeaders.push('REMARKS');
+            // Auto-append separate 'MY REMARKS' header if it doesn't exist
+            if (!csvHeaders.includes('MY REMARKS')) {
+                csvHeaders.push('MY REMARKS');
             }
 
             // Map rows to JavaScript Objects
@@ -135,7 +135,7 @@
                 return rowObj;
             });
 
-            // Reveal hidden dashboard spaces
+            // Reveal workspace and download system
             workspace.classList.remove('hidden');
             downloadBtn.classList.remove('hidden');
             downloadBtn.removeAttribute('disabled');
@@ -174,7 +174,7 @@
                     <div>
                         <div class="text-xs font-bold text-blue-600">ID: ${row['ITEM_ID'] || 'N/A'}</div>
                         <div class="text-sm font-medium text-gray-800 line-clamp-1">${row['DESCRIPTION'] || 'No Description'}</div>
-                        ${row['REMARKS'] ? `<div class="text-xs text-green-600 mt-1 italic">✓ Has Remark</div>` : ''}
+                        ${row['MY REMARKS'] ? `<div class="text-xs text-green-600 mt-1 italic">✓ Has Remarks</div>` : ''}
                     </div>
                     <div class="text-gray-400">&#x276F;</div>
                 `;
@@ -191,7 +191,8 @@
             
             detailFields.innerHTML = '';
             csvHeaders.forEach(header => {
-                if (header !== 'REMARKS') {
+                // Keep 'MY REMARKS' split from structural technical fields
+                if (header !== 'MY REMARKS') {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'flex flex-col border-b border-gray-50 pb-1';
                     itemDiv.innerHTML = `
@@ -202,7 +203,7 @@
                 }
             });
 
-            remarksInput.value = row['REMARKS'] || '';
+            remarksInput.value = row['MY REMARKS'] || '';
             detailSection.classList.remove('hidden');
             detailSection.scrollIntoView({ behavior: 'smooth' });
         }
@@ -213,8 +214,8 @@
 
             const targetRow = csvData.find(r => r._originalIndex === activeRowIndex);
             if (targetRow) {
-                targetRow['REMARKS'] = remarksInput.value.trim();
-                alert('Remark recorded successfully!');
+                targetRow['MY REMARKS'] = remarksInput.value.trim();
+                alert('Remarks saved!');
                 detailSection.classList.add('hidden');
                 renderTiles(); 
             }
@@ -225,7 +226,7 @@
             activeRowIndex = null;
         });
 
-        // Download Final Document
+        // Download Document including the 'MY REMARKS' column
         downloadBtn.addEventListener('click', () => {
             if (csvData.length === 0) return;
 
