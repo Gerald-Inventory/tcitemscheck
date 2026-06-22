@@ -102,8 +102,6 @@
                 })
                 .then(text => {
                     parseCSV(text);
-                    loadingStatus.className = "text-sm text-green-600 font-medium text-center py-2";
-                    loadingStatus.innerHTML = "✅ tcitems.csv loaded successfully!";
                 })
                 .catch(error => {
                     loadingStatus.className = "text-sm text-red-600 font-medium text-center py-2";
@@ -112,28 +110,63 @@
                 });
         });
 
+        // Robust CSV Parser (Handles quoted fields, commas inside quotes, and escaped characters)
+        function parseCSVLines(text) {
+            let lines = [];
+            let row = [""];
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                let c = text[i];
+                let next = text[i+1];
+
+                if (c === '"') {
+                    if (inQuotes && next === '"') { 
+                        row[row.length - 1] += '"'; 
+                        i++; 
+                    } else { 
+                        inQuotes = !inQuotes; 
+                    }
+                } else if (c === ',' && !inQuotes) {
+                    row.push('');
+                } else if ((c === '\r' || c === '\n') && !inQuotes) {
+                    if (c === '\r' && next === '\n') { i++; }
+                    lines.push(row);
+                    row = [''];
+                } else {
+                    row[row.length - 1] += c;
+                }
+            }
+            if (row.length > 1 || row[0] !== '') {
+                lines.push(row);
+            }
+            return lines;
+        }
+
         function parseCSV(text) {
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-            if (lines.length === 0) return;
+            const allParsedLines = parseCSVLines(text);
+            if (allParsedLines.length === 0) return;
 
             // Extract Headers
-            csvHeaders = lines[0].split(',').map(h => h.trim());
+            csvHeaders = allParsedLines[0].map(h => h.trim());
             
             // Auto-append separate 'MY REMARKS' header if it doesn't exist
             if (!csvHeaders.includes('MY REMARKS')) {
                 csvHeaders.push('MY REMARKS');
             }
 
-            // Map rows to JavaScript Objects
-            csvData = lines.slice(1).map((line, index) => {
-                const values = line.split(',').map(v => v.trim());
+            // Map rows safely
+            csvData = allParsedLines.slice(1).map((values, index) => {
                 const rowObj = { _originalIndex: index }; 
-                
                 csvHeaders.forEach((header, i) => {
-                    rowObj[header] = values[i] || ''; 
+                    rowObj[header] = values[i] !== undefined ? values[i].trim() : ''; 
                 });
                 return rowObj;
             });
+
+            // Update Success UI
+            loadingStatus.className = "text-sm text-green-600 font-medium text-center py-2";
+            loadingStatus.innerHTML = `✅ loaded successfully! (${csvData.length} records found)`;
 
             // Reveal workspace and download system
             workspace.classList.remove('hidden');
@@ -191,7 +224,6 @@
             
             detailFields.innerHTML = '';
             csvHeaders.forEach(header => {
-                // Keep 'MY REMARKS' split from structural technical fields
                 if (header !== 'MY REMARKS') {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'flex flex-col border-b border-gray-50 pb-1';
@@ -226,7 +258,7 @@
             activeRowIndex = null;
         });
 
-        // Download Document including the 'MY REMARKS' column
+        // Download Final Document
         downloadBtn.addEventListener('click', () => {
             if (csvData.length === 0) return;
 
@@ -236,7 +268,8 @@
             csvData.forEach(row => {
                 const lineValues = csvHeaders.map(header => {
                     let cell = row[header] === undefined || row[header] === null ? '' : String(row[header]);
-                    if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                    // Standard compliance escaping for commas/quotes
+                    if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                         cell = `"${cell.replace(/"/g, '""')}"`;
                     }
                     return cell;
@@ -244,11 +277,13 @@
                 csvRows.push(lineValues.join(','));
             });
 
-            const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
-            const encodedUri = encodeURI(csvContent);
+            // Using Blob approach to prevent browser URI length limitations on large files
+            const csvString = csvRows.join("\n");
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", "tcitems_updated.csv");
             document.body.appendChild(link);
             link.click();
