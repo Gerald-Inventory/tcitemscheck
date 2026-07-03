@@ -14,7 +14,7 @@
     <div class="max-w-md mx-auto px-4 py-6">
         <header class="mb-6 text-center">
             <h1 class="text-2xl font-bold text-blue-600">CSV Lookup Tool</h1>
-            <p class="text-sm text-gray-500">Auto-loaded from GitHub • Edit Description & Remarks</p>
+            <p class="text-sm text-gray-500">Auto-loaded from GitHub • Isolated Column Search</p>
         </header>
 
         <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200">
@@ -29,7 +29,6 @@
 
         <div id="workspace" class="hidden">
             
-            <!-- CHANGED: Wrapped filters in a standard form element to allow manual search execution -->
             <form id="searchForm" class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200 space-y-4">
                 <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wider">Search Filters</h2>
                 
@@ -111,7 +110,7 @@
         const saveRemarkBtn = document.getElementById('saveRemarkBtn');
         const closeDetail = document.getElementById('closeDetail');
 
-        // Fetch CSV file context
+        // Fetch CSV data stream
         window.addEventListener('DOMContentLoaded', () => {
             fetch('tcitems.csv')
                 .then(response => {
@@ -165,7 +164,7 @@
 
             csvHeaders = allParsedLines[0].map(h => h.trim());
             
-            // Header Auto-Detection Matching
+            // Explicit Header Priority Mapping
             const foundIdKey = csvHeaders.find(h => {
                 const norm = h.toLowerCase();
                 return norm.includes('id') || norm.includes('sku') || norm.includes('number') || norm.includes('code');
@@ -178,7 +177,7 @@
             idKey = foundIdKey || csvHeaders[0] || 'COLUMN_1';
             descKey = foundDescKey || csvHeaders[1] || 'COLUMN_2';
 
-            // Sync dynamic UI text tags
+            // Update user view labels
             labelId.textContent = `${idKey} (Identifier Search)`;
             labelDesc.textContent = `${descKey} (Text Search)`;
             searchId.placeholder = `Search by ${idKey}...`;
@@ -205,12 +204,12 @@
             downloadBtn.removeAttribute('disabled');
         }
 
-        // CHANGED: Replaced live input listeners with an explicit form submit interceptor
         searchForm.addEventListener('submit', (e) => {
-            e.preventDefault(); // Stop page from refreshing
+            e.preventDefault();
             renderTiles();
         });
 
+        // FIXED: The filtering code cleanly isolates search criteria inputs to their correct columns
         function renderTiles() {
             const idQuery = searchId.value.toLowerCase().trim();
             const descQuery = searchDesc.value.toLowerCase().trim();
@@ -222,12 +221,17 @@
 
             tilesContainer.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Filtering dataset...</p>';
 
-            // Run search process safely across clean fields
             setTimeout(() => {
                 const filtered = csvData.filter(row => {
-                    const itemId = (row[idKey] || '').toLowerCase();
-                    const description = (row[descKey] || '').toLowerCase();
-                    return itemId.includes(idQuery) && description.includes(descQuery);
+                    // Extract values cleanly from target header columns
+                    const rowIdValue = (row[idKey] || '').toLowerCase();
+                    const rowDescValue = (row[descKey] || '').toLowerCase();
+
+                    // Strict matching logic: ID input evaluates against ID column, Text input evaluates against Description column
+                    const matchesId = idQuery === '' || rowIdValue.includes(idQuery);
+                    const matchesDesc = descQuery === '' || rowDescValue.includes(descQuery);
+
+                    return matchesId && matchesDesc;
                 });
 
                 if (filtered.length === 0) {
@@ -252,10 +256,9 @@
                     tile.addEventListener('click', () => showDetails(row._originalIndex));
                     tilesContainer.appendChild(tile);
                 });
-            }, 50); // Small timeout allows browser to render the loading state smoothly
+            }, 50); 
         }
 
-        // Build Detail Block
         function showDetails(index) {
             activeRowIndex = index;
             const row = csvData.find(r => r._originalIndex === index);
@@ -280,7 +283,6 @@
             detailSection.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Commit local form buffers to dataset storage array
         saveRemarkBtn.addEventListener('click', () => {
             if (activeRowIndex === null) return;
 
@@ -300,7 +302,6 @@
             activeRowIndex = null;
         });
 
-        // Pack array and download updated document via custom blob architecture
         downloadBtn.addEventListener('click', () => {
             if (csvData.length === 0) return;
 
