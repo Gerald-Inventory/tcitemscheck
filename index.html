@@ -6,7 +6,6 @@
     <title>CSV Item Manager</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        /* Smooth scrolling for better mobile UX */
         html { scroll-behavior: smooth; }
     </style>
 </head>
@@ -14,13 +13,13 @@
 
     <div class="max-w-md mx-auto px-4 py-6">
         <header class="mb-6 text-center">
-            <h1 class="text-2xl font-bold text-blue-600">tcitems.csv Lookup</h1>
-            <p class="text-sm text-gray-500">Auto-loaded from GitHub • Search, remark, and export</p>
+            <h1 class="text-2xl font-bold text-blue-600">CSV Lookup Tool</h1>
+            <p class="text-sm text-gray-500">Auto-loaded from GitHub • Edit Description & Remarks</p>
         </header>
 
         <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200">
             <div id="loadingStatus" class="text-sm text-blue-600 font-medium text-center py-2 animate-pulse">
-                ⏳ Loading tcitems.csv from repository...
+                ⏳ Loading CSV from repository...
             </div>
             
             <button id="downloadBtn" disabled class="w-full bg-green-600 text-white py-2.5 px-4 rounded-md font-medium shadow-sm hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition justify-center items-center hidden">
@@ -30,24 +29,29 @@
 
         <div id="workspace" class="hidden">
             
-            <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200 space-y-4">
+            <!-- CHANGED: Wrapped filters in a standard form element to allow manual search execution -->
+            <form id="searchForm" class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200 space-y-4">
                 <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wider">Search Filters</h2>
                 
                 <div>
-                    <label for="searchId" class="block text-xs font-medium text-gray-500 mb-1">ITEM_ID (Numbers Only)</label>
-                    <input type="text" id="searchId" inputmode="numeric" pattern="[0-9]*" placeholder="e.g., 12345" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                    <label id="labelId" for="searchId" class="block text-xs font-medium text-gray-500 mb-1">IDENTIFIER</label>
+                    <input type="text" id="searchId" placeholder="Search ID..." class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                 </div>
 
                 <div>
-                    <label for="searchDesc" class="block text-xs font-medium text-gray-500 mb-1">DESCRIPTION (Text)</label>
-                    <input type="text" id="searchDesc" placeholder="e.g., Wireless Mouse" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                    <label id="labelDesc" for="searchDesc" class="block text-xs font-medium text-gray-500 mb-1">DESCRIPTION</label>
+                    <input type="text" id="searchDesc" placeholder="Search Text..." class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                 </div>
-            </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium shadow-sm hover:bg-blue-700 transition flex justify-center items-center gap-2 cursor-pointer">
+                    🔍 Execute Search
+                </button>
+            </form>
 
             <div class="mb-6">
                 <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">Results</h2>
                 <div id="tilesContainer" class="grid grid-cols-1 gap-3">
-                    <p class="text-gray-400 text-sm italic">Type above to filter items...</p>
+                    <p class="text-gray-400 text-sm italic">Enter criteria above and click search...</p>
                 </div>
             </div>
 
@@ -58,6 +62,11 @@
                 </div>
                 
                 <div id="detailFields" class="space-y-2 text-sm"></div>
+
+                <div class="pt-2 border-t border-gray-100">
+                    <label id="editDescLabel" for="editDescInput" class="block text-sm font-semibold text-gray-700 mb-1">Modify Description</label>
+                    <input type="text" id="editDescInput" placeholder="Edit description text..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                </div>
 
                 <div class="pt-2 border-t border-gray-100">
                     <label for="remarksInput" class="block text-sm font-semibold text-gray-700 mb-1">My Remarks</label>
@@ -78,31 +87,38 @@
         let csvData = []; 
         let activeRowIndex = null;
 
+        // Dynamic Keys Config
+        let idKey = '';
+        let descKey = '';
+        const REMARKS_KEY = 'MY REMARKS';
+
         // UI Elements
         const loadingStatus = document.getElementById('loadingStatus');
         const downloadBtn = document.getElementById('downloadBtn');
         const workspace = document.getElementById('workspace');
+        const searchForm = document.getElementById('searchForm');
         const searchId = document.getElementById('searchId');
         const searchDesc = document.getElementById('searchDesc');
+        const labelId = document.getElementById('labelId');
+        const labelDesc = document.getElementById('labelDesc');
         const tilesContainer = document.getElementById('tilesContainer');
         const detailSection = document.getElementById('detailSection');
         const detailFields = document.getElementById('detailFields');
+        
+        const editDescLabel = document.getElementById('editDescLabel');
+        const editDescInput = document.getElementById('editDescInput');
         const remarksInput = document.getElementById('remarksInput');
         const saveRemarkBtn = document.getElementById('saveRemarkBtn');
         const closeDetail = document.getElementById('closeDetail');
 
-        // Automatically fetch "tcitems.csv" when the page loads
+        // Fetch CSV file context
         window.addEventListener('DOMContentLoaded', () => {
             fetch('tcitems.csv')
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Could not find tcitems.csv in the repository folder.');
-                    }
+                    if (!response.ok) throw new Error('Could not find tcitems.csv in the repository folder.');
                     return response.text();
                 })
-                .then(text => {
-                    parseCSV(text);
-                })
+                .then(text => parseCSV(text))
                 .catch(error => {
                     loadingStatus.className = "text-sm text-red-600 font-medium text-center py-2";
                     loadingStatus.innerHTML = `❌ Error: ${error.message}`;
@@ -110,7 +126,7 @@
                 });
         });
 
-        // Robust CSV Parser (Handles quoted fields, commas inside quotes, and escaped characters)
+        // Robust CSV Line Parser
         function parseCSVLines(text) {
             let lines = [];
             let row = [""];
@@ -147,15 +163,32 @@
             const allParsedLines = parseCSVLines(text);
             if (allParsedLines.length === 0) return;
 
-            // Extract Headers
             csvHeaders = allParsedLines[0].map(h => h.trim());
             
-            // Auto-append separate 'MY REMARKS' header if it doesn't exist
-            if (!csvHeaders.includes('MY REMARKS')) {
-                csvHeaders.push('MY REMARKS');
+            // Header Auto-Detection Matching
+            const foundIdKey = csvHeaders.find(h => {
+                const norm = h.toLowerCase();
+                return norm.includes('id') || norm.includes('sku') || norm.includes('number') || norm.includes('code');
+            });
+            const foundDescKey = csvHeaders.find(h => {
+                const norm = h.toLowerCase();
+                return norm.includes('desc') || norm.includes('name') || norm.includes('title') || norm.includes('item');
+            });
+
+            idKey = foundIdKey || csvHeaders[0] || 'COLUMN_1';
+            descKey = foundDescKey || csvHeaders[1] || 'COLUMN_2';
+
+            // Sync dynamic UI text tags
+            labelId.textContent = `${idKey} (Identifier Search)`;
+            labelDesc.textContent = `${descKey} (Text Search)`;
+            searchId.placeholder = `Search by ${idKey}...`;
+            searchDesc.placeholder = `Search by ${descKey}...`;
+            editDescLabel.textContent = `Modify ${descKey}`;
+
+            if (!csvHeaders.includes(REMARKS_KEY)) {
+                csvHeaders.push(REMARKS_KEY);
             }
 
-            // Map rows safely
             csvData = allParsedLines.slice(1).map((values, index) => {
                 const rowObj = { _originalIndex: index }; 
                 csvHeaders.forEach((header, i) => {
@@ -164,90 +197,99 @@
                 return rowObj;
             });
 
-            // Update Success UI
             loadingStatus.className = "text-sm text-green-600 font-medium text-center py-2";
-            loadingStatus.innerHTML = `✅ loaded successfully! (${csvData.length} records found)`;
+            loadingStatus.innerHTML = `✅ Loaded successfully! (${csvData.length} records mapped)`;
 
-            // Reveal workspace and download system
             workspace.classList.remove('hidden');
             downloadBtn.classList.remove('hidden');
             downloadBtn.removeAttribute('disabled');
         }
 
-        // Search & Filter Handling
-        searchId.addEventListener('input', renderTiles);
-        searchDesc.addEventListener('input', renderTiles);
+        // CHANGED: Replaced live input listeners with an explicit form submit interceptor
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault(); // Stop page from refreshing
+            renderTiles();
+        });
 
         function renderTiles() {
             const idQuery = searchId.value.toLowerCase().trim();
             const descQuery = searchDesc.value.toLowerCase().trim();
 
             if (!idQuery && !descQuery) {
-                tilesContainer.innerHTML = '<p class="text-gray-400 text-sm italic">Type above to filter items...</p>';
+                tilesContainer.innerHTML = '<p class="text-red-500 text-sm italic">Please enter at least one filter before searching.</p>';
                 return;
             }
 
-            const filtered = csvData.filter(row => {
-                const itemId = (row['ITEM_ID'] || '').toLowerCase();
-                const description = (row['DESCRIPTION'] || '').toLowerCase();
-                return itemId.includes(idQuery) && description.includes(descQuery);
-            });
+            tilesContainer.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Filtering dataset...</p>';
 
-            if (filtered.length === 0) {
-                tilesContainer.innerHTML = '<p class="text-gray-500 text-sm">No items found.</p>';
-                return;
-            }
+            // Run search process safely across clean fields
+            setTimeout(() => {
+                const filtered = csvData.filter(row => {
+                    const itemId = (row[idKey] || '').toLowerCase();
+                    const description = (row[descKey] || '').toLowerCase();
+                    return itemId.includes(idQuery) && description.includes(descQuery);
+                });
 
-            tilesContainer.innerHTML = '';
-            filtered.forEach(row => {
-                const tile = document.createElement('div');
-                tile.className = 'bg-white p-4 rounded-lg shadow-xs border border-gray-200 active:bg-blue-50 cursor-pointer transition flex justify-between items-center';
-                
-                tile.innerHTML = `
-                    <div>
-                        <div class="text-xs font-bold text-blue-600">ID: ${row['ITEM_ID'] || 'N/A'}</div>
-                        <div class="text-sm font-medium text-gray-800 line-clamp-1">${row['DESCRIPTION'] || 'No Description'}</div>
-                        ${row['MY REMARKS'] ? `<div class="text-xs text-green-600 mt-1 italic">✓ Has Remarks</div>` : ''}
-                    </div>
-                    <div class="text-gray-400">&#x276F;</div>
-                `;
+                if (filtered.length === 0) {
+                    tilesContainer.innerHTML = '<p class="text-gray-500 text-sm">No matching items found.</p>';
+                    return;
+                }
 
-                tile.addEventListener('click', () => showDetails(row._originalIndex));
-                tilesContainer.appendChild(tile);
-            });
+                tilesContainer.innerHTML = '';
+                filtered.forEach(row => {
+                    const tile = document.createElement('div');
+                    tile.className = 'bg-white p-4 rounded-lg shadow-xs border border-gray-200 active:bg-blue-50 cursor-pointer transition flex justify-between items-center';
+                    
+                    tile.innerHTML = `
+                        <div class="max-w-[90%]">
+                            <div class="text-xs font-bold text-blue-600">${idKey}: ${row[idKey] || 'N/A'}</div>
+                            <div class="text-sm font-medium text-gray-800 line-clamp-1">${row[descKey] || 'No Data Available'}</div>
+                            ${row[REMARKS_KEY] ? `<div class="text-xs text-green-600 mt-1 italic">✓ Has Remarks</div>` : ''}
+                        </div>
+                        <div class="text-gray-400 text-sm">&#x276F;</div>
+                    `;
+
+                    tile.addEventListener('click', () => showDetails(row._originalIndex));
+                    tilesContainer.appendChild(tile);
+                });
+            }, 50); // Small timeout allows browser to render the loading state smoothly
         }
 
-        // Detail View Presentation
+        // Build Detail Block
         function showDetails(index) {
             activeRowIndex = index;
             const row = csvData.find(r => r._originalIndex === index);
             
             detailFields.innerHTML = '';
             csvHeaders.forEach(header => {
-                if (header !== 'MY REMARKS') {
+                if (header !== REMARKS_KEY && header !== descKey) {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'flex flex-col border-b border-gray-50 pb-1';
                     itemDiv.innerHTML = `
                         <span class="text-gray-400 text-xs uppercase font-medium">${header}</span>
-                        <span class="text-gray-900 font-medium">${row[header] || '-'}</span>
+                        <span class="text-gray-900 font-medium break-words">${row[header] || '-'}</span>
                     `;
                     detailFields.appendChild(itemDiv);
                 }
             });
 
-            remarksInput.value = row['MY REMARKS'] || '';
+            editDescInput.value = row[descKey] || '';
+            remarksInput.value = row[REMARKS_KEY] || '';
+            
             detailSection.classList.remove('hidden');
             detailSection.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Save Local Changes
+        // Commit local form buffers to dataset storage array
         saveRemarkBtn.addEventListener('click', () => {
             if (activeRowIndex === null) return;
 
             const targetRow = csvData.find(r => r._originalIndex === activeRowIndex);
             if (targetRow) {
-                targetRow['MY REMARKS'] = remarksInput.value.trim();
-                alert('Remarks saved!');
+                targetRow[descKey] = editDescInput.value.trim();
+                targetRow[REMARKS_KEY] = remarksInput.value.trim();
+                
+                alert('Changes saved successfully!');
                 detailSection.classList.add('hidden');
                 renderTiles(); 
             }
@@ -258,7 +300,7 @@
             activeRowIndex = null;
         });
 
-        // Download Final Document
+        // Pack array and download updated document via custom blob architecture
         downloadBtn.addEventListener('click', () => {
             if (csvData.length === 0) return;
 
@@ -268,7 +310,6 @@
             csvData.forEach(row => {
                 const lineValues = csvHeaders.map(header => {
                     let cell = row[header] === undefined || row[header] === null ? '' : String(row[header]);
-                    // Standard compliance escaping for commas/quotes
                     if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
                         cell = `"${cell.replace(/"/g, '""')}"`;
                     }
@@ -277,7 +318,6 @@
                 csvRows.push(lineValues.join(','));
             });
 
-            // Using Blob approach to prevent browser URI length limitations on large files
             const csvString = csvRows.join("\n");
             const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
