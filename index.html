@@ -62,9 +62,10 @@
                 
                 <div id="detailFields" class="space-y-2 text-sm"></div>
 
+                <!-- CHANGED: Swapped input for textarea to cleanly display and allow full selection of long text descriptions -->
                 <div class="pt-2 border-t border-gray-100">
                     <label id="editDescLabel" for="editDescInput" class="block text-sm font-semibold text-gray-700 mb-1">Modify Description</label>
-                    <input type="text" id="editDescInput" placeholder="Edit description text..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                    <textarea id="editDescInput" rows="3" placeholder="Edit description text..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"></textarea>
                 </div>
 
                 <div class="pt-2 border-t border-gray-100">
@@ -209,7 +210,6 @@
             renderTiles();
         });
 
-        // FIXED: The filtering code cleanly isolates search criteria inputs to their correct columns
         function renderTiles() {
             const idQuery = searchId.value.toLowerCase().trim();
             const descQuery = searchDesc.value.toLowerCase().trim();
@@ -223,11 +223,9 @@
 
             setTimeout(() => {
                 const filtered = csvData.filter(row => {
-                    // Extract values cleanly from target header columns
                     const rowIdValue = (row[idKey] || '').toLowerCase();
                     const rowDescValue = (row[descKey] || '').toLowerCase();
 
-                    // Strict matching logic: ID input evaluates against ID column, Text input evaluates against Description column
                     const matchesId = idQuery === '' || rowIdValue.includes(idQuery);
                     const matchesDesc = descQuery === '' || rowDescValue.includes(descQuery);
 
@@ -282,6 +280,11 @@
             detailSection.classList.remove('hidden');
             detailSection.scrollIntoView({ behavior: 'smooth' });
         }
+
+        // ADDED: Automatically select the full text of the description when clicked/focused
+        editDescInput.addEventListener('focus', () => {
+            editDescInput.select();
+        });
 
         saveRemarkBtn.addEventListener('click', () => {
             if (activeRowIndex === null) return;
