@@ -22,32 +22,45 @@
             <div id="loadingStatus" class="text-sm text-blue-600 font-medium text-center py-2 animate-pulse">
                 ⏳ Loading tcitems.csv from repository...
             </div>
-            
+
             <button id="downloadBtn" disabled class="w-full bg-green-600 text-white py-2.5 px-4 rounded-md font-medium shadow-sm hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition justify-center items-center hidden">
                 Download Updated CSV
             </button>
         </div>
 
         <div id="workspace" class="hidden">
-            
+
             <div class="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200 space-y-4">
                 <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wider">Search Filters</h2>
-                
+
                 <div>
-                    <label for="searchId" class="block text-xs font-medium text-gray-500 mb-1">ITEM_ID (Numbers Only)</label>
-                    <input type="text" id="searchId" inputmode="numeric" pattern="[0-9]*" placeholder="e.g., 12345" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                    <label for="storeCodeFilter" class="block text-xs font-medium text-gray-500 mb-1">STORE CODE</label>
+                    <select id="storeCodeFilter" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                        <option value="">All Store Codes</option>
+                    </select>
                 </div>
 
                 <div>
-                    <label for="searchDesc" class="block text-xs font-medium text-gray-500 mb-1">DESCRIPTION (Text)</label>
+                    <label for="searchId" class="block text-xs font-medium text-gray-500 mb-1">ITEM_ID</label>
+                    <input type="text" id="searchId" inputmode="numeric" placeholder="e.g., 12345" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                </div>
+
+                <div>
+                    <label for="searchDesc" class="block text-xs font-medium text-gray-500 mb-1">DESCRIPTION</label>
                     <input type="text" id="searchDesc" placeholder="e.g., Wireless Mouse" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                 </div>
+
+                <div>
+                    <label for="searchEan" class="block text-xs font-medium text-gray-500 mb-1">EAN CODE</label>
+                    <input type="text" id="searchEan" inputmode="numeric" placeholder="Enter EAN code" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
+                </div>
+                <p class="text-xs text-gray-400">Search using ITEM_ID, DESCRIPTION, or EAN CODE. If more than one search field is filled, a match in any one of them is accepted. STORE CODE limits the results.</p>
             </div>
 
             <div class="mb-6">
                 <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">Results</h2>
                 <div id="tilesContainer" class="grid grid-cols-1 gap-3">
-                    <p class="text-gray-400 text-sm italic">Type above to filter items...</p>
+                    <p class="text-gray-400 text-sm italic">Choose a store or type above to filter items...</p>
                 </div>
             </div>
 
@@ -56,7 +69,7 @@
                     <h3 class="text-lg font-bold text-gray-900">Item Details</h3>
                     <button id="closeDetail" class="text-gray-400 hover:text-gray-600 font-bold text-xl px-2">&times;</button>
                 </div>
-                
+
                 <div id="detailFields" class="space-y-2 text-sm"></div>
 
                 <div class="pt-2 border-t border-gray-100">
@@ -82,8 +95,10 @@
         const loadingStatus = document.getElementById('loadingStatus');
         const downloadBtn = document.getElementById('downloadBtn');
         const workspace = document.getElementById('workspace');
+        const storeCodeFilter = document.getElementById('storeCodeFilter');
         const searchId = document.getElementById('searchId');
         const searchDesc = document.getElementById('searchDesc');
+        const searchEan = document.getElementById('searchEan');
         const tilesContainer = document.getElementById('tilesContainer');
         const detailSection = document.getElementById('detailSection');
         const detailFields = document.getElementById('detailFields');
@@ -105,7 +120,7 @@
                 })
                 .catch(error => {
                     loadingStatus.className = "text-sm text-red-600 font-medium text-center py-2";
-                    loadingStatus.innerHTML = `❌ Error: ${error.message}`;
+                    loadingStatus.textContent = `❌ Error: ${error.message}`;
                     console.error(error);
                 });
         });
@@ -118,14 +133,14 @@
 
             for (let i = 0; i < text.length; i++) {
                 let c = text[i];
-                let next = text[i+1];
+                let next = text[i + 1];
 
                 if (c === '"') {
-                    if (inQuotes && next === '"') { 
-                        row[row.length - 1] += '"'; 
-                        i++; 
-                    } else { 
-                        inQuotes = !inQuotes; 
+                    if (inQuotes && next === '"') {
+                        row[row.length - 1] += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
                     }
                 } else if (c === ',' && !inQuotes) {
                     row.push('');
@@ -149,7 +164,7 @@
 
             // Extract Headers
             csvHeaders = allParsedLines[0].map(h => h.trim());
-            
+
             // Auto-append separate 'MY REMARKS' header if it doesn't exist
             if (!csvHeaders.includes('MY REMARKS')) {
                 csvHeaders.push('MY REMARKS');
@@ -157,16 +172,19 @@
 
             // Map rows safely
             csvData = allParsedLines.slice(1).map((values, index) => {
-                const rowObj = { _originalIndex: index }; 
+                const rowObj = { _originalIndex: index };
                 csvHeaders.forEach((header, i) => {
-                    rowObj[header] = values[i] !== undefined ? values[i].trim() : ''; 
+                    rowObj[header] = values[i] !== undefined ? values[i].trim() : '';
                 });
                 return rowObj;
             });
 
+            // Populate STORE CODE filter only if the column exists
+            populateStoreCodes();
+
             // Update Success UI
             loadingStatus.className = "text-sm text-green-600 font-medium text-center py-2";
-            loadingStatus.innerHTML = `✅ loaded successfully! (${csvData.length} records found)`;
+            loadingStatus.textContent = `✅ loaded successfully! (${csvData.length} records found)`;
 
             // Reveal workspace and download system
             workspace.classList.remove('hidden');
@@ -174,23 +192,64 @@
             downloadBtn.removeAttribute('disabled');
         }
 
+        // Populate unique STORE CODE values from the CSV
+        function populateStoreCodes() {
+            storeCodeFilter.innerHTML = '<option value="">All Store Codes</option>';
+
+            if (!csvHeaders.includes('STORE CODE')) {
+                storeCodeFilter.disabled = true;
+                storeCodeFilter.innerHTML = '<option value="">STORE CODE column not found</option>';
+                return;
+            }
+
+            storeCodeFilter.disabled = false;
+            const storeCodes = [...new Set(
+                csvData.map(row => (row['STORE CODE'] || '').trim()).filter(value => value !== '')
+            )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+            storeCodes.forEach(code => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = code;
+                storeCodeFilter.appendChild(option);
+            });
+        }
+
         // Search & Filter Handling
+        storeCodeFilter.addEventListener('change', renderTiles);
         searchId.addEventListener('input', renderTiles);
         searchDesc.addEventListener('input', renderTiles);
+        searchEan.addEventListener('input', renderTiles);
 
         function renderTiles() {
             const idQuery = searchId.value.toLowerCase().trim();
             const descQuery = searchDesc.value.toLowerCase().trim();
+            const eanQuery = searchEan.value.toLowerCase().trim();
+            const selectedStoreCode = storeCodeFilter.value.toLowerCase().trim();
 
-            if (!idQuery && !descQuery) {
-                tilesContainer.innerHTML = '<p class="text-gray-400 text-sm italic">Type above to filter items...</p>';
+            const hasSearchQuery = Boolean(idQuery || descQuery || eanQuery);
+            if (!hasSearchQuery && !selectedStoreCode) {
+                tilesContainer.innerHTML = '<p class="text-gray-400 text-sm italic">Choose a store or type above to filter items...</p>';
                 return;
             }
 
             const filtered = csvData.filter(row => {
-                const itemId = (row['ITEM_ID'] || '').toLowerCase();
-                const description = (row['DESCRIPTION'] || '').toLowerCase();
-                return itemId.includes(idQuery) && description.includes(descQuery);
+                const rowStoreCode = (row['STORE CODE'] || '').toLowerCase().trim();
+
+                // STORE CODE is an additional filter; if selected, the row must match it.
+                if (selectedStoreCode && rowStoreCode !== selectedStoreCode) return false;
+
+                // Search ITEM_ID, DESCRIPTION, or EAN CODE. Any populated search field may match.
+                const itemId = String(row['ITEM_ID'] || '').toLowerCase();
+                const description = String(row['DESCRIPTION'] || '').toLowerCase();
+                const eanCode = String(row['EAN CODE'] || '').toLowerCase();
+
+                const searchMatches = [];
+                if (idQuery) searchMatches.push(itemId.includes(idQuery));
+                if (descQuery) searchMatches.push(description.includes(descQuery));
+                if (eanQuery) searchMatches.push(eanCode.includes(eanQuery));
+
+                return searchMatches.some(Boolean);
             });
 
             if (filtered.length === 0) {
@@ -202,15 +261,34 @@
             filtered.forEach(row => {
                 const tile = document.createElement('div');
                 tile.className = 'bg-white p-4 rounded-lg shadow-xs border border-gray-200 active:bg-blue-50 cursor-pointer transition flex justify-between items-center';
-                
-                tile.innerHTML = `
-                    <div>
-                        <div class="text-xs font-bold text-blue-600">ID: ${row['ITEM_ID'] || 'N/A'}</div>
-                        <div class="text-sm font-medium text-gray-800 line-clamp-1">${row['DESCRIPTION'] || 'No Description'}</div>
-                        ${row['MY REMARKS'] ? `<div class="text-xs text-green-600 mt-1 italic">✓ Has Remarks</div>` : ''}
-                    </div>
-                    <div class="text-gray-400">&#x276F;</div>
-                `;
+
+                const itemId = row['ITEM_ID'] || 'N/A';
+                const description = row['DESCRIPTION'] || 'No Description';
+                const hasRemarks = row['MY REMARKS'] ? '<div class="text-xs text-green-600 mt-1 italic">✓ Has Remarks</div>' : '';
+
+                // Use textContent for CSV-sourced values to avoid interpreting them as HTML.
+                const left = document.createElement('div');
+                const idLine = document.createElement('div');
+                idLine.className = 'text-xs font-bold text-blue-600';
+                idLine.textContent = `ID: ${itemId}`;
+                const descLine = document.createElement('div');
+                descLine.className = 'text-sm font-medium text-gray-800 line-clamp-1';
+                descLine.textContent = description;
+                left.appendChild(idLine);
+                left.appendChild(descLine);
+
+                if (row['MY REMARKS']) {
+                    const remarkLine = document.createElement('div');
+                    remarkLine.className = 'text-xs text-green-600 mt-1 italic';
+                    remarkLine.textContent = '✓ Has Remarks';
+                    left.appendChild(remarkLine);
+                }
+
+                const arrow = document.createElement('div');
+                arrow.className = 'text-gray-400';
+                arrow.textContent = '❯';
+                tile.appendChild(left);
+                tile.appendChild(arrow);
 
                 tile.addEventListener('click', () => showDetails(row._originalIndex));
                 tilesContainer.appendChild(tile);
@@ -221,16 +299,24 @@
         function showDetails(index) {
             activeRowIndex = index;
             const row = csvData.find(r => r._originalIndex === index);
-            
+            if (!row) return;
+
             detailFields.innerHTML = '';
             csvHeaders.forEach(header => {
                 if (header !== 'MY REMARKS') {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'flex flex-col border-b border-gray-50 pb-1';
-                    itemDiv.innerHTML = `
-                        <span class="text-gray-400 text-xs uppercase font-medium">${header}</span>
-                        <span class="text-gray-900 font-medium">${row[header] || '-'}</span>
-                    `;
+
+                    const label = document.createElement('span');
+                    label.className = 'text-gray-400 text-xs uppercase font-medium';
+                    label.textContent = header;
+
+                    const value = document.createElement('span');
+                    value.className = 'text-gray-900 font-medium';
+                    value.textContent = row[header] || '-';
+
+                    itemDiv.appendChild(label);
+                    itemDiv.appendChild(value);
                     detailFields.appendChild(itemDiv);
                 }
             });
@@ -249,7 +335,7 @@
                 targetRow['MY REMARKS'] = remarksInput.value.trim();
                 alert('Remarks saved!');
                 detailSection.classList.add('hidden');
-                renderTiles(); 
+                renderTiles();
             }
         });
 
@@ -263,16 +349,12 @@
             if (csvData.length === 0) return;
 
             const csvRows = [];
-            csvRows.push(csvHeaders.join(',')); 
+            csvRows.push(csvHeaders.map(escapeCSVCell).join(','));
 
             csvData.forEach(row => {
                 const lineValues = csvHeaders.map(header => {
-                    let cell = row[header] === undefined || row[header] === null ? '' : String(row[header]);
-                    // Standard compliance escaping for commas/quotes
-                    if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
-                        cell = `"${cell.replace(/"/g, '""')}"`;
-                    }
-                    return cell;
+                    const cell = row[header] === undefined || row[header] === null ? '' : String(row[header]);
+                    return escapeCSVCell(cell);
                 });
                 csvRows.push(lineValues.join(','));
             });
@@ -281,14 +363,23 @@
             const csvString = csvRows.join("\n");
             const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            
+
             const link = document.createElement("a");
             link.setAttribute("href", url);
             link.setAttribute("download", "tcitems_updated.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         });
+
+        function escapeCSVCell(value) {
+            let cell = String(value);
+            if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
+                cell = `"${cell.replace(/"/g, '""')}"`;
+            }
+            return cell;
+        }
     </script>
 </body>
 </html>
